@@ -1,0 +1,7 @@
+.env
+.env.*
+node_modules/
+.supermemory/
+build.log
+image.png
+*.png

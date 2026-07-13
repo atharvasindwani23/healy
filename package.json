@@ -1,0 +1,16 @@
+{
+  "name": "healy",
+  "version": "0.1.0",
+  "description": "A texting-first health companion that turns wearable data into insight — and remembers you.",
+  "type": "module",
+  "scripts": {
+    "start": "node --env-file=.env.local --env-file=.env.telegram src/bot.js",
+    "chat": "node --env-file=.env.local --env-file=.env.telegram src/cli.js",
+    "seed": "node --env-file=.env.local src/seed.js",
+    "beat": "node --env-file=.env.local --env-file=.env.telegram src/beat.js",
+    "watch": "node --env-file=.env.local --env-file=.env.telegram src/watcher.js"
+  },
+  "dependencies": {
+    "openai": "^4.67.0"
+  }
+}

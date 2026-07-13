@@ -1,0 +1,32 @@
+{
+  "_comment": "Healy reads meals from here. Daily target is in config (USER.calorieTarget). Times are local (America/Chicago). Edit freely to play with scenarios — today's meals drive 'calories remaining' and 'time since last meal'. Swap for a real nutrition API later; interface stays the same.",
+  "dailyTargetKcal": 2300,
+  "meals": [
+    { "date": "2026-07-07", "time": "08:15", "meal": "breakfast", "place": "Eltana Wood-Fired Bagel", "item": "double-egg bagel sandwich", "calories": 600 },
+    { "date": "2026-07-07", "time": "12:45", "meal": "lunch", "place": "Chipotle", "item": "chicken burrito bowl", "calories": 1000 },
+    { "date": "2026-07-07", "time": "19:30", "meal": "dinner", "place": "Homegrown", "item": "turkey sustainable club", "calories": 650 },
+
+    { "date": "2026-07-08", "time": "09:00", "meal": "breakfast", "place": "Portage Bay Cafe", "item": "veggie scramble", "calories": 550 },
+    { "date": "2026-07-08", "time": "13:00", "meal": "lunch", "place": "Sweetgreen", "item": "harvest bowl", "calories": 700 },
+    { "date": "2026-07-08", "time": "20:00", "meal": "dinner", "place": "Tacos Chukis", "item": "3 adobada tacos", "calories": 750 },
+
+    { "date": "2026-07-09", "time": "08:30", "meal": "breakfast", "place": "Starbucks", "item": "spinach feta wrap + latte", "calories": 500 },
+    { "date": "2026-07-09", "time": "12:30", "meal": "lunch", "place": "Verve Bowls", "item": "acai protein bowl", "calories": 550 },
+    { "date": "2026-07-09", "time": "19:00", "meal": "dinner", "place": "Paseo", "item": "caribbean roast sandwich", "calories": 900 },
+
+    { "date": "2026-07-10", "time": "08:45", "meal": "breakfast", "place": "Eltana Wood-Fired Bagel", "item": "double-egg bagel sandwich", "calories": 600 },
+    { "date": "2026-07-10", "time": "13:15", "meal": "lunch", "place": "Plantiful", "item": "high-protein plant bowl", "calories": 620 },
+    { "date": "2026-07-10", "time": "19:45", "meal": "dinner", "place": "Dick's Drive-In", "item": "deluxe burger + fries", "calories": 1050 },
+
+    { "date": "2026-07-11", "time": "09:15", "meal": "breakfast", "place": "Cafe Ladro", "item": "avocado toast", "calories": 450 },
+    { "date": "2026-07-11", "time": "12:00", "meal": "lunch", "place": "Chipotle", "item": "chicken burrito bowl", "calories": 1000 },
+    { "date": "2026-07-11", "time": "18:30", "meal": "dinner", "place": "Serious Pie", "item": "2 slices margherita", "calories": 780 },
+
+    { "date": "2026-07-12", "time": "08:30", "meal": "breakfast", "place": "Eltana Wood-Fired Bagel", "item": "lox bagel", "calories": 520 },
+    { "date": "2026-07-12", "time": "13:30", "meal": "lunch", "place": "Sweetgreen", "item": "kale caesar + chicken", "calories": 680 },
+    { "date": "2026-07-12", "time": "20:15", "meal": "dinner", "place": "Un Bien", "item": "caribbean roast", "calories": 950 },
+
+    { "date": "2026-07-13", "time": "08:20", "meal": "breakfast", "place": "Eltana Wood-Fired Bagel", "item": "double-egg bagel sandwich", "calories": 600 },
+    { "date": "2026-07-13", "time": "12:30", "meal": "lunch", "place": "Chipotle", "item": "chicken burrito bowl", "calories": 1000 }
+  ]
+}
