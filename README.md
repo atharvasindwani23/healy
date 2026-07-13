@@ -1,200 +1,183 @@
-# Pulse — the health bot that *remembers* you
+# Healy 🩺
 
-> A texting-first health companion that turns raw wearable data into plain-language insight and one concrete action — and gets smarter every day because it remembers your body, your goals, and your life.
+**Your health data has a lot to say. It's just never learned to text.**
 
-**Built for the Supermemory Local Hackathon (July 9–13).**
-Solo project · TypeScript/Node · Real SMS · 100% local memory layer.
+Healy is a texting-first health companion. It reads your wearable, remembers your life, knows where you are and what you ate, and messages you like a friend who happens to have a medical-adjacent brain — *"slept solid last night, like 7.5 hrs. you've been heads-down 2 hrs and it's been 4h since you ate — grab a bowl from Plantiful, you've got 700 cals left."*
+
+No app to open. No dashboard to decode. Just a text that already did the thinking.
+
+Built on **[Supermemory Local](https://supermemory.ai)** — the memory layer is the whole point, and it never leaves your machine.
 
 ---
 
-## The problem
+## The thesis
 
-Wearables sell **precision**, not **meaning**. The more you pay, the more exact the numbers — and the less you understand them. "You got 2h of REM and 55m of deep sleep" is data, not insight. Worse, once you've already bought the device, the *interpretation* is locked behind another monthly subscription (Fitbit Premium, Oura, Whoop).
+Wearables sell **precision**. They do not sell **meaning**. Every year the sensor gets a better optical heart-rate array and a worse idea of what to tell you about it. You end up paying a subscription to be told your "readiness is 62" — a number derived from data you already own, delivered with the interpretive depth of a mood ring.
 
-You end up with a pile of numbers you don't understand and no idea what to actually **do**.
+Healy inverts that. You already bought the sensor. The insight should be free — and it should come to you, phrased like a person, at the moment it's useful.
 
-## The idea
-
-**Pulse** is a bot that texts you like a friend throughout your day. No app to open — advice arrives as a text you read in 2 seconds. It:
-
-- **Translates** your data into plain meaning + **one** concrete action.
-- **Remembers** — your baselines, your goals, what it told you yesterday, when you usually sleep.
-- **Encourages**, not just corrects — "great day, only 1,000 steps left 💪" matters as much as "maybe skip the midnight run to Dave's."
-- **Checks in with context** — knows roughly where you are and what you're doing, and times advice to the moment.
-
-## Why Supermemory is the hero 🦸
-
-A health bot that only reacts to *today's* numbers is forgettable. A health bot that **remembers** is the entire product. Every genuinely useful thing Pulse says is only possible because of the local memory layer:
-
-| What Pulse says | What it had to *remember* |
-|---|---|
-| "Your deep sleep is down 30% vs your usual." | your rolling personal **baseline** |
-| "Since you're cutting weight, grab something lighter." | your stated **goal** |
-| "Yesterday you said you slept badly — better tonight?" | **past conversation** |
-| "You usually sleep around now, and you've got that meeting." | learned **bedtime pattern** + calendar |
-| "You've hit your step goal 4 days running — nice streak." | **historical trend** |
-
-Supermemory Local stores all of it — embeddings, storage, and semantic search, entirely on-device. It's not a passive database; it's what makes the bot feel like it *knows you*. Strip it out and Pulse is just a fancy stats readout.
+The trick that makes it more than a notification spammer is **memory**. A bot that reacts to today's numbers is a stats readout with extra steps. A bot that knows your baseline, your goals, what you ate three hours ago, and what you told it last night is a companion. That memory is Supermemory, running entirely local.
 
 ---
 
 ## Architecture
 
 ```
-  Fitbit ──► Google Health MCP ──► Insight Engine (LLM) ──► Twilio SMS ──► your phone
-                                          ▲   │
-                                          │   ▼
-                                   Supermemory Local
-                            (baselines · goals · past chats ·
-                             sleep/step patterns · what it told you before)
+                                   ┌──────────────────────────────┐
+                                   │        Insight Engine         │
+   Telegram  ◄──── long-poll ────► │      (OpenAI, src/engine)     │
+  (two-way,                        │  fuse → interpret → 1 action  │
+   location)                       └───────────┬──────────────────┘
+      ▲                                        │  recall / write
+      │ send                    ┌──────────────┼───────────────────────────┐
+      │                         ▼              ▼               ▼            ▼
+ ┌────┴─────┐          ┌─────────────┐  ┌────────────┐  ┌───────────┐ ┌──────────┐
+ │  Watcher │          │ Supermemory │  │   Google   │  │  Places   │ │ Calendar │
+ │ proactive│          │    Local    │  │   Health   │  │   (New)   │ │ Nutrition│
+ │  nudges  │          │  :6767      │  │   v4 API   │  │ text srch │ │  (json)  │
+ └──────────┘          │ (semantic)  │  │  (Fitbit)  │  └───────────┘ └──────────┘
+                       └─────────────┘  └────────────┘
 ```
 
-**Flow of a single nudge:**
-1. A **trigger** fires (scheduled beat, or an inbound text from you).
-2. Pulse pulls the relevant **live data** from the Google Health MCP (sleep, steps, resting HR, active minutes).
-3. It **recalls** relevant memories from Supermemory (your baseline for this metric, your goals, recent check-ins).
-4. The **Insight Engine** (LLM) fuses live data + memory + current context into *meaning + one action*.
-5. It **sends an SMS** via Twilio.
-6. It **writes back** to Supermemory — what it observed, what it advised, how you replied — so tomorrow is smarter.
+Everything is plain ESM Node (`type: "module"`), zero build step, zero framework. Secrets live in `--env-file` files; nothing is hardcoded. The whole thing is ~10 small modules that each do one job and compose.
 
-### Components
+### The signal-fusion loop (the actual magic)
 
-| Component | Tech | Role |
-|---|---|---|
-| **Data source** | Google Health MCP (already working) | Real Fitbit sleep, steps, resting HR, AZM |
-| **Memory** | Supermemory Local | Baselines, goals, conversation history, patterns |
-| **Insight Engine** | Claude (LLM) | Data + memory + context → meaning + one action |
-| **Messaging** | Twilio SMS | Two-way texting, the Poke-style interface |
-| **Orchestrator** | Node/TS service | Triggers, context object, glue |
-| **Demo clock** | Scripted scene runner | Fires the 4 demo beats on a compressed timeline |
+Every inbound message — text *or* location — runs through the same pipeline in `src/engine.js`:
+
+1. **Recall** — semantic search against Supermemory for memories relevant to what you just said (`recall(userMessage)`).
+2. **Snapshot** — pull live Fitbit data in parallel (`Promise.all` over sleep / steps / AZM / resting HR / workouts).
+3. **Context assembly** — memories + Fitbit snapshot + calendar + nutrition + (optional) location & nearby places get flattened into one dense prompt block.
+4. **Compose** — OpenAI generates a reply under a system prompt tuned hard against chatbot-voice (no "Hey Atharva! 🌟", no bullet lists, no motivational bows — lowercase, contractions, one emoji max, 1–3 sentences).
+5. **Write-back** — the exchange is persisted to Supermemory as a `checkin` memory, so tomorrow's recall is smarter than today's.
+
+That write-back step is why it compounds. Every conversation is training data for the next one, stored locally, retrieved by meaning rather than keyword.
 
 ---
 
-## The demo (this is the 3-min video)
+## Why Supermemory is the hero
 
-A compressed "day in the life." **The data and reasoning are real** (real Fitbit data, real LLM insight, real memory recall); the *time-of-day transitions and location are staged* for the video — standard for ambient-AI demos. Each beat is designed to visibly show **memory doing work**.
+Strip Supermemory out and Healy degrades into a weather app for your body. Every genuinely personal thing it says is a memory retrieval:
 
-**🌅 Scene 1 — Morning (wake up)**
-> *Pulse texts:* "Morning Atharva ☀️ You slept 7h25m at 98% efficiency — that's **better than your 3-day average**, and your deep sleep was strong. Hope you dreamt about something good. Sleep score: 88/100."
->
-> *Memory in action:* "better than your average" requires the stored baseline.
-
-**🏢 Scene 2 — Midday (office)**
-> *Pulse texts:* "You've been heads-down at the office ~3 hrs. Hydrate 💧 And since you're **cutting weight this month**, when you grab lunch near you, aim for protein + greens — skip the heavy carbs. You're at 4,200 steps."
->
-> *Memory in action:* recalls the weight-loss goal + ties advice to rough location.
-
-**🏋️ Scene 3 — Post-gym**
-> *Pulse texts:* "Great session — 30 active-zone minutes, all fat-burn. Refuel with ~25g protein in the next hour. One tip: you've been all fat-burn zone lately; add one short push into cardio zone next time to build your engine."
->
-> *Memory in action:* compares today's zones against the remembered pattern.
-
-**🌙 Scene 4 — Night (wind-down)**
-> *Pulse texts:* "Hey Atharva — you've got that meeting tomorrow, and you usually wind down around now. Let's protect it: phone down, hot shower, moisturize, lights out. You crushed today — only 1,000 steps to close your ring if you want a quick walk first 🚶"
->
-> *Memory in action:* learned bedtime pattern + tomorrow's calendar + the day's step progress.
-
-**Reply beat (shows two-way + memory write):** You text back "slept badly, roommate was loud." Pulse acknowledges, and **stores it** — so tomorrow's morning text references it. That closing loop is the money shot for a *memory* hackathon.
-
----
-
-## What's real vs. staged (honest scoping)
-
-Being upfront so the build stays achievable in ~2.5 days:
-
-| Piece | v1 for the demo |
+| What Healy says | The memory behind it |
 |---|---|
-| Fitbit data | **Real** — via the working Google Health MCP |
-| Insight generation | **Real** — live LLM calls |
-| Memory (baseline/goals/history) | **Real** — Supermemory Local |
-| SMS | **Real** — Twilio to an actual phone |
-| Time-of-day beats | **Staged** — a scene runner fires them on a compressed clock |
-| Location | **Simplified** — on-demand phone location or a set demo location per scene; **no** 24/7 background GPS, **no** "detect which app you opened" (impossible on iOS anyway) |
+| *"better than your usual"* | computed `baseline` (rolling avg, we do the math deterministically) |
+| *"fits your weight-cutting vibe"* | `goal` — recalled semantically, not hardcoded |
+| *"you usually crash around 11:30"* | learned `pattern` |
+| *"you had Chipotle for lunch, 700 cals left"* | `nutrition` entries + running budget |
+| *"before your big demo"* | `calendar` context |
+| *"yesterday you said you slept bad"* | prior `checkin`, written back automatically |
 
-This keeps every *claim in the video truthful* while skipping the production-only plumbing (background-location entitlements, App Store review) that a hackathon doesn't need.
+Memories are natural-language documents with scalar metadata (`type: goal|pattern|baseline|nutrition|checkin|event|profile`), scoped by `containerTag`, retrieved with **hybrid semantic search** (`searchMode: "hybrid"`, `threshold: 0.3`). Embeddings are the local `bge-base` model — **no data leaves the box.** A query like *"what are my health goals?"* returns the weight-loss memory at ~0.6 similarity despite sharing zero keywords. That's the entire product working.
 
----
-
-## Supermemory schema (draft)
-
-Memories are written as tagged, searchable entries. Rough shape:
-
-- **`baseline`** — rolling stats per metric. e.g. `{ metric: "deep_sleep_min", avg_3d: 77, avg_7d: 74 }`
-- **`goal`** — user objectives. e.g. `"Atharva wants to lose weight this month; prefers high-protein."`
-- **`pattern`** — learned rhythms. e.g. `"Usually asleep by ~11:30pm; wakes ~7am."`
-- **`checkin`** — conversation turns. e.g. `"Jul 11 night: user said slept badly, roommate loud."`
-- **`event`** — logged happenings. e.g. `"Jul 11: gym session, 30 AZM fat-burn."`
-- **`profile`** — stable facts. e.g. `"Age 20. Fitbit user. Timezone America/Los_Angeles."`
-
-On each interaction Pulse does a **semantic search** over these to assemble the context it needs, then **adds** new memories after responding.
+**Design decision worth calling out:** we do *not* trust the LLM extraction layer to do arithmetic. Numbers ("down 30% vs baseline") are computed in code, deterministically, and *stored* as memories. Supermemory owns qualitative recall; our code owns math. Async "dreaming" extraction is great for "roommate was loud → recalled next morning," terrible for a trustworthy percentage.
 
 ---
 
-## Build plan (~2.5 days, solo)
+## The integrations, in detail
 
-Today is **July 11**. Deadline **July 13, 23:59 PST**. Commit history is checked — build in-window.
+### 🏃 Google Health (Fitbit) — `src/googleHealth.js`
+Talks directly to `health.googleapis.com/v4`, reusing the Google Health MCP's stored OAuth creds and refreshing the access token on demand (cached until 60s before expiry). Three endpoint dialects, reverse-engineered against the live API:
 
-### Day 1 (rest of today) — Core insight engine + memory
-- [ ] Repo scaffold (public GitHub, TS/Node), env config
-- [ ] Wire Google Health MCP: pull sleep (reconcile), steps/AZM (daily rollup), resting HR (reconcile)
-- [ ] Stand up **Supermemory Local**; write the schema above; seed profile + goal
-- [ ] Insight Engine v1: `data + memories → { message, action }` via LLM prompt
-- [ ] Baseline job: compute rolling averages, store as `baseline` memories
-- [ ] **Milestone:** run a script → get a real morning-sleep insight in the terminal that references the baseline
+- **`:reconcile`** (GET) — the cross-source stitched stream. This is the *only* path that returns sleep and daily-resting-heart-rate; the naive `list` endpoint returns empty for them (a genuine footgun — we found it the hard way).
+- **`:dailyRollUp`** (POST, body `{range:{start:{date},end:{date}}}`) — steps, active-zone-minutes, distance. Watch the `windowSize * pageSize ≤ 90 days` limit or it 400s.
+- **`list`** (GET) — raw exercise sessions.
 
-### Day 2 — Texting + the loop + context
-- [ ] Twilio: send SMS; receive inbound (webhook) for two-way
-- [ ] On inbound text → recall memory → respond → **write** the reply to memory
-- [ ] Add rough location/context into the prompt (per-scene demo value)
-- [ ] The 4 insight "beats" as callable functions (morning/midday/gym/night)
-- [ ] **Milestone:** text the bot from your phone, get a memory-aware reply
+Everything is normalized into insight-ready objects: sleep gets decomposed into stages + a **Healy Sleep Score** (0–100: 40% efficiency, 30% duration-vs-8h, 30% deep+REM proportion — transparent and deterministic, not a black box). Averages exclude the partial current day so *"better than your average"* is an honest comparison.
 
-### Day 3 (until 23:59 PST) — Demo polish + submission
-- [ ] Scene runner: fire the 4 beats on a compressed clock for filming
-- [ ] Tune prompts so each text is tight, warm, specific, one-action
-- [ ] Verify the "slept badly → referenced next morning" memory loop on camera
-- [ ] Record ≤3-min demo video (the day-in-the-life arc above)
-- [ ] Clean README, push public repo
-- [ ] **Submit:** Google Form + `#showcase` post (both required by deadline)
+### 🧠 Supermemory — `src/memory.js`
+Two functions, `remember(content, type)` and `recall(query)`, wrapping `POST /v3/documents` and `POST /v4/search` on `localhost:6767`. Local mode needs no auth. That's it. The simplicity is the point — the intelligence is in *what* we store and *when* we retrieve it.
 
----
+### 📍 Location + Places — `src/places.js`, `src/location.js`
+Telegram is the location source (a bot can't passively track you — Telegram removed the attachment-menu Location option in bot chats, so we send a `request_location` reply-keyboard button instead). Two modes, and the distinction matters:
 
-## Judging fit (why this can win)
+- **Live location** streams an update every few seconds. Healy stores it **silently** — updates a last-known-position + a "how long stationary near this spot" haversine tracker. It never replies to a live update. (Early versions did. Ten Plantiful texts happened. It's debounced now.)
+- **One-time pin** = an explicit "recommend something" → single reply.
 
-- **Meaningfully uses Supermemory Local** — memory isn't a feature, it's the reason the bot works. Directly addresses the core rule.
-- **Emotional hook** — a bot that texts you about your health and remembers your bad night lands with judges and People's Choice voters alike.
-- **Real, working data** — not a mockup; it reads an actual Fitbit and says true things.
-- **Clean 3-min story** — the day-in-the-life arc is inherently watchable.
+Nearby healthy food comes from **Google Places API (New) `searchText`** querying *"healthy food restaurant"* with a location bias — because pure type-based Nearby Search misses the salad/poke/bowl spots. Results run through a keyword+type **health-scoring heuristic** that rewards `salad|poke|bowl|mediterranean|vegan|…` and penalizes `fried|hot chicken|burger|brewery|bar|…`, then drops anything clearly unhealthy. Reverse-geocoding turns lat/lng into *"Capitol Hill, Seattle."*
+
+### 🍔 Nutrition — `src/nutrition.js`
+Tracks meals, calories, and — critically — **time since last meal** and **calories remaining vs. daily target**. A week of realistic Seattle meals lives in `nutrition.json` (edit it live; the bot re-reads with no restart). This powers the flagship proactive moment: noticing you're low on fuel and haven't eaten, cross-referenced with location and how long you've been sitting.
+
+### 📅 Calendar — `src/calendar.js`
+Today/tomorrow's events feed context ("wind down, you've got a 9am"). Backed by `calendar.json` behind an interface identical to the real Google Calendar API — the swap to live OAuth is a one-function change (the health token lacks Calendar scope, so this is the honest stopgap).
+
+### 📲 Telegram transport — `src/telegram.js`
+Long-polling (`getUpdates`, 30s timeout) — **no webhook, no tunnel, fully local.** Skips backlog on boot so it only handles new messages. Handles text, one-time locations, and live locations distinctly via `live_period`. `askForLocation()` sends the tap-to-share button.
 
 ---
 
-## Setup (to be filled in as built)
+## Proactive intelligence — `src/watcher.js`
+
+The part that makes Healy feel *alive*: it texts you first, but rarely, and only when it has a reason. A poll loop (default every 2 min) checks two triggers, each behind a cooldown so it never nags:
+
+- **Post-workout** — a newly-synced Fitbit exercise fires a congrats + refuel tip that accounts for your remaining calories. (90-min cooldown. Note: Fitbit sync lags 15min–hrs, so this is honestly-delayed, not instant.)
+- **Low fuel** — daytime only, when it's been >3h since your last meal *and* you have calories left *and* (bonus signal) you've been stationary in one spot a while: a gentle *"you've been heads-down and running low, grab something near you that fits your goal."* (120-min cooldown.)
+
+State is primed on boot (existing workouts marked seen) so it reacts only to what happens *after* it starts.
+
+---
+
+## Module map
+
+```
+src/
+├── config.js       user profile, timezones, targets, credential loading
+├── googleHealth.js Fitbit v4 client — reconcile / rollup / list + Sleep Score
+├── memory.js       Supermemory remember() / recall()
+├── engine.js       the brain: chat(), chatWithLocation(), composeBeat()
+├── places.js       Google Places text-search + health-scoring + geocoding
+├── location.js     silent live-location store + haversine dwell tracking
+├── nutrition.js    meals, calories remaining, time-since-last-meal
+├── calendar.js     today/tomorrow events (Google Calendar-shaped interface)
+├── telegram.js     long-poll transport, location button, send
+├── bot.js          the live two-way loop (npm start)
+├── watcher.js      proactive nudges (npm run watch)
+├── seed.js         seed profile/goals/baselines/nutrition into memory
+├── cli.js          chat with Healy in the terminal
+└── beat.js         fire a proactive beat on demand
+```
+
+---
+
+## Running it
+
+**Prereqs:** Node 20+, [Supermemory Local](https://supermemory.ai/docs/self-hosting/quickstart) running on `:6767`, a Telegram bot token (via @BotFather), an OpenAI key, a Google Places API key, and Google Health OAuth (via the Google Health MCP).
 
 ```bash
-# Prereqs: Node 20+, a Twilio number, Supermemory Local running, Google Health MCP configured
-git clone <repo>
-cd pulse
 npm install
-cp .env.example .env   # add Twilio + Supermemory + Google Health creds
-npm run dev
+
+# secrets (git-ignored)
+echo 'OPENAI_API_KEY=sk-...'          > .env.local
+echo 'GOOGLE_PLACES_API_KEY=AIza...' >> .env.local
+printf 'TELEGRAM_BOT_TOKEN=...\nTELEGRAM_CHAT_ID=...\n' > .env.telegram
+
+npm run seed          # load profile, goals, baselines, a week of nutrition into Supermemory
+npm start             # the two-way bot goes live on Telegram
+npm run watch         # (separately) proactive workout + hunger nudges
+
+npm run chat -- "how did i sleep?"   # terminal chat, no Telegram
+npm run beat -- gym                  # fire a proactive beat manually
 ```
 
-## Stretch goals (only if ahead of schedule)
-
-- Real phone geofence for one live "you're near X" nudge
-- Calendar (Google Calendar API — the easy integration) for real "meeting tomorrow"
-- Nutrition logging (Google Health already supports it) to connect food → energy/sleep
-- Weekly digest text summarizing trends from memory
+Then text your bot. Ask it how you slept. Tell it you're stressed. Send it a location and watch it find you a bowl.
 
 ---
 
-## Non-goals (explicitly out of scope for the hackathon)
+## Notable engineering footguns (documented so you don't rediscover them)
 
-- 24/7 background location tracking
-- Detecting which apps you open (impossible on iOS)
-- Any medical/diagnostic claims — Pulse is a wellness coach, not a doctor
-- Multi-user accounts, billing, production privacy infra
+- **Sleep & resting-HR only exist on `:reconcile`, not `list`.** The obvious endpoint lies to you with an empty array.
+- **`success: true` ≠ delivered.** (Learned from a *different* messaging platform whose free tier silently dropped API sends while returning 200s. Telegram doesn't do this. Telegram is honest.)
+- **Live location will absolutely spam you** if you reply per update. Debounce or die.
+- **Places Nearby Search under-returns healthy spots** vs. `searchText` with a "healthy" query. Fried chicken will out-rank salad unless you score against it.
+- **Rollup queries 400** if `windowSize * pageSize > 90 days`.
 
 ---
 
-*Pulse — you already bought the sensor. The insight should be free.*
+## What's local vs. cloud
+
+**Local:** Supermemory (storage, embeddings, semantic search — your entire health memory), the whole Node app, long-poll transport, all business logic. **Cloud:** OpenAI (composition), Google Health (your own Fitbit data), Google Places (public restaurant data), Telegram (transport). Your *memory* — the sensitive, cumulative model of you — never leaves the machine.
+
+---
+
+*Healy — you already bought the sensor. The insight should be free.*
