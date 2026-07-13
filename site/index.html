@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Healy — a day in the life</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #05060a;
+    --bg2: #0a0d16;
+    --glass: rgba(20, 24, 38, 0.55);
+    --stroke: rgba(120, 160, 255, 0.14);
+    --text: #e8ecf6;
+    --muted: #8b93a9;
+    --accent: #5eead4;
+    --accent2: #7c93ff;
+    --bubble: linear-gradient(135deg, rgba(124,147,255,0.16), rgba(94,234,212,0.10));
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    overflow-x: hidden;
+    line-height: 1.5;
+  }
+
+  /* animated aurora background */
+  .aurora {
+    position: fixed; inset: 0; z-index: -2; overflow: hidden;
+    background: radial-gradient(1200px 800px at 15% -10%, rgba(124,147,255,0.18), transparent 60%),
+                radial-gradient(1000px 700px at 90% 10%, rgba(94,234,212,0.14), transparent 55%),
+                radial-gradient(900px 900px at 50% 110%, rgba(139,92,246,0.12), transparent 60%),
+                var(--bg);
+  }
+  .grid {
+    position: fixed; inset: 0; z-index: -1;
+    background-image: linear-gradient(rgba(120,160,255,0.045) 1px, transparent 1px),
+                      linear-gradient(90deg, rgba(120,160,255,0.045) 1px, transparent 1px);
+    background-size: 44px 44px;
+    mask-image: radial-gradient(circle at 50% 30%, black, transparent 85%);
+  }
+
+  .wrap { max-width: 760px; margin: 0 auto; padding: 0 22px; }
+
+  /* hero */
+  header.hero {
+    min-height: 92vh; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; text-align: center;
+    position: relative;
+  }
+  .badge {
+    font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 2px;
+    text-transform: uppercase; color: var(--accent);
+    border: 1px solid var(--stroke); background: var(--glass);
+    padding: 8px 16px; border-radius: 999px; backdrop-filter: blur(12px);
+    margin-bottom: 30px;
+  }
+  .logo {
+    font-size: clamp(58px, 12vw, 130px); font-weight: 800; letter-spacing: -3px;
+    background: linear-gradient(135deg, #fff 20%, var(--accent) 60%, var(--accent2) 100%);
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+    line-height: 0.95;
+  }
+  .tagline { font-size: clamp(17px, 2.6vw, 23px); color: var(--muted); max-width: 540px; margin: 22px auto 0; font-weight: 300; }
+  .tagline b { color: var(--text); font-weight: 600; }
+  .scrolldown { position: absolute; bottom: 34px; color: var(--muted); font-size: 13px; font-family: 'JetBrains Mono', monospace; animation: bob 2s ease-in-out infinite; }
+  @keyframes bob { 0%,100% { transform: translateY(0); opacity: .55; } 50% { transform: translateY(8px); opacity: 1; } }
+
+  /* section time markers */
+  .timeblock { padding: 70px 0 10px; }
+  .time-label {
+    display: flex; align-items: center; gap: 14px; margin-bottom: 26px;
+    opacity: 0; transform: translateY(20px); transition: all .7s cubic-bezier(.2,.7,.2,1);
+  }
+  .time-label.in { opacity: 1; transform: none; }
+  .time-emoji { font-size: 26px; }
+  .time-name { font-size: 22px; font-weight: 700; letter-spacing: -.5px; }
+  .time-sub { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); }
+  .time-line { flex: 1; height: 1px; background: linear-gradient(90deg, var(--stroke), transparent); }
+
+  /* chat bubbles */
+  .bubble {
+    position: relative; max-width: 82%; margin: 14px 0;
+    background: var(--bubble); border: 1px solid var(--stroke);
+    padding: 15px 18px; border-radius: 22px 22px 22px 6px;
+    backdrop-filter: blur(16px); font-size: 16px; color: var(--text);
+    box-shadow: 0 8px 40px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.05);
+    opacity: 0; transform: translateY(26px) scale(.98); transition: all .65s cubic-bezier(.2,.7,.2,1);
+  }
+  .bubble.in { opacity: 1; transform: none; }
+  .bubble .who {
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 1px;
+    text-transform: uppercase; color: var(--accent); margin-bottom: 6px; display: flex; gap: 8px; align-items: center;
+  }
+  .bubble .who::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--accent); }
+  .meta { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); margin: 2px 0 0 6px; }
+
+  /* data chips under some messages */
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 0 6px; opacity: 0; transform: translateY(14px); transition: all .6s ease .15s; }
+  .chips.in { opacity: 1; transform: none; }
+  .chip {
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted);
+    border: 1px solid var(--stroke); border-radius: 8px; padding: 4px 10px; background: rgba(255,255,255,0.02);
+  }
+  .chip b { color: var(--accent); font-weight: 500; }
+
+  /* footer */
+  footer { padding: 90px 0 70px; text-align: center; }
+  .foot-quote { font-size: clamp(20px, 3vw, 30px); font-weight: 700; letter-spacing: -.6px; background: linear-gradient(135deg,#fff,var(--accent)); -webkit-background-clip: text; background-clip:text; -webkit-text-fill-color: transparent; }
+  .foot-sub { color: var(--muted); margin-top: 16px; font-size: 15px; font-weight: 300; }
+  .stack { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 30px; }
+  .tag { font-family:'JetBrains Mono',monospace; font-size: 11px; color: var(--muted); border:1px solid var(--stroke); border-radius:999px; padding:6px 13px; background: var(--glass); }
+</style>
+</head>
+<body>
+<div class="aurora"></div>
+<div class="grid"></div>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="badge">◈ powered by supermemory · local</div>
+    <div class="logo">Healy</div>
+    <p class="tagline">A health companion that <b>remembers you</b>, knows where you are, and texts like a friend. Here's one real day — <b>morning to night</b>, everything it said.</p>
+  </div>
+  <div class="scrolldown">scroll ↓</div>
+</header>
+
+<main class="wrap" id="thread"></main>
+
+<footer class="wrap">
+  <div class="foot-quote">You already bought the sensor.<br/>The insight should be free.</div>
+  <p class="foot-sub">Every message below was generated from real wearable data, semantic memory, location & nutrition — not scripted.</p>
+  <div class="stack">
+    <span class="tag">Supermemory Local</span>
+    <span class="tag">Fitbit / Google Health</span>
+    <span class="tag">OpenAI</span>
+    <span class="tag">Google Places</span>
+    <span class="tag">Telegram</span>
+  </div>
+</footer>
+
+<script>
+  // The real day, in order.
+  const DAY = [
+    { time: "Morning", emoji: "☀️", sub: "07:12 · woke up",
+      msg: "morning, dude. you actually slept solid last night — like 7.7 hrs with a pretty awesome score. hope you're feeling refreshed for that big presentation today.",
+      chips: ["<b>7.7h</b> asleep", "<b>99</b> healy sleep score", "better than your avg"] },
+    { time: "Midday", emoji: "🏢", sub: "13:40 · at the office",
+      msg: "you've been crushing it with those steps today, already halfway to your usual. maybe grab some water and a light high-protein snack to keep you fueled for that demo later.",
+      chips: ["<b>~6k</b> steps so far", "hydrate 💧", "recalled: cutting weight"] },
+    { time: "Afternoon", emoji: "🏋️", sub: "17:26 · just left the gym",
+      msg: "nice walk, man. that 29-min gym session burned 170 cal with a chill avg HR of 103. you've got 700 cal left to play with today. maybe swing by Chipotle? a burrito bowl with double chicken and no queso would fit your protein goal. easy 400m walk from here too. 💪",
+      chips: ["<b>29</b> min", "<b>170</b> cal burned", "<b>103</b> avg HR", "Chipotle · <b>400m</b>", "<b>700</b> cal left"] },
+    { time: "Night", emoji: "🌙", sub: "23:18 · winding down",
+      msg: "saw you've been glued to your phone for a while… time to start winding down maybe? 🤔 also, protein shake in the morning might help since you fell short today.",
+      chips: ["~2h screen time", "protein goal missed", "usual bedtime ~11:30"] },
+  ];
+
+  const thread = document.getElementById("thread");
+  DAY.forEach((beat) => {
+    const block = document.createElement("section");
+    block.className = "timeblock";
+    block.innerHTML = `
+      <div class="time-label">
+        <span class="time-emoji">${beat.emoji}</span>
+        <span class="time-name">${beat.time}</span>
+        <span class="time-line"></span>
+        <span class="time-sub">${beat.sub}</span>
+      </div>
+      <div class="bubble">
+        <div class="who">Healy</div>
+        ${beat.msg}
+      </div>
+      <div class="chips">${beat.chips.map(c => `<span class="chip">${c}</span>`).join("")}</div>
+    `;
+    thread.appendChild(block);
+  });
+
+  // scroll-reveal
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(e => { if (e.isIntersecting) e.target.classList.add("in"); });
+  }, { threshold: 0.25 });
+  document.querySelectorAll(".time-label, .bubble, .chips").forEach(el => io.observe(el));
+</script>
+</body>
+</html>
